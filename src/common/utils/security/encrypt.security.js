@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-const ENCRYPTION_KEY = Buffer.from("12345678901234567890123456789012"); // Must be 256 bits (32 characters)
+const ENCRYPTION_KEY = Buffer.from("12345678901234567890123456789012"); 
 const IV_LENGTH = 16;
 
 export function encrypt(text) {

@@ -5,14 +5,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     minLength: 3,
-    maxLength: 10,
+    maxLength: 20,
     trim:true
     },
     lastName: {
     type: String,
     required: true,
     minLength: 3,
-    maxLength: 10,
+    maxLength: 20,
     trim:true
   },
     email: {
@@ -24,7 +24,9 @@ const userSchema = new mongoose.Schema({
   },
     password: {
     type: String,
-    required: true,
+    required: function () {
+      return this.provider === providerEnum.system ? true : false
+    },
     minLength: 6,
     trim:true
   },
@@ -39,7 +41,12 @@ const userSchema = new mongoose.Schema({
     enum:Object.values(genderEnum),
     default:genderEnum.male
   },
-  Provider:{
+  role:{
+    type:String,
+    enum:["admin","user"],
+    default:"user"
+  },
+  provider:{
     type:String,
     enum:Object.values(providerEnum),
     default:providerEnum.system

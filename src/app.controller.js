@@ -2,17 +2,18 @@ import express from 'express';
 import { authMiddleware } from "./common/middleware/auth.service.js";
 import { authRouter, userOperationRouter } from './modules/userModule/user.controller.js';
 import { connectionDB } from "./DB/connectionDB.js";
+import cors from "cors"
 const app = express()
 const port = 3000
 
 export const bootStrap = () =>{
-app.use(express.json());
+app.use(cors(),express.json());
 app.get("/", (req, res) => res.send("Hello World!"));
 
 connectionDB();
 
 app.use("/auth",authRouter);
-app.use("/user", authMiddleware, userOperationRouter);
+app.use("/user", authMiddleware,userOperationRouter);
 
 
 
