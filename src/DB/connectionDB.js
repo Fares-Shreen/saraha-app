@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
+import { db_uri } from "../config/env.sevices.js";
 export const connectionDB = async () => {
-  await mongoose.connect(process.env.MONGO_URL , {
+  await mongoose.connect(db_uri , {
       serverSelectionTimeoutMS: 3000,
     })
     .then(() => {

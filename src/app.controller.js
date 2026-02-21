@@ -3,8 +3,9 @@ import { authMiddleware } from "./common/middleware/auth.service.js";
 import { authRouter, userOperationRouter } from './modules/userModule/user.controller.js';
 import { connectionDB } from "./DB/connectionDB.js";
 import cors from "cors"
+import { port } from './config/env.sevices.js';
 const app = express()
-const port = 3000
+
 
 export const bootStrap = () =>{
 app.use(cors(),express.json());

@@ -9,6 +9,7 @@ import jwt from "jsonwebtoken";
 import { compare, hash } from "../../common/utils/security/hash.security.js";
 import { OAuth2Client } from "google-auth-library";
 import { providerEnum, roleEnum } from "../../common/enum/enum.js";
+import { JWT_SECRET } from "../../config/env.sevices.js";
 
 export const signup = async (req, res, next) => {
   const {
@@ -101,7 +102,7 @@ export const signUpWithGoogle = async (req, res, next) => {
     }
     const token = jwt.sign(
       { id: user._id, email: user.email },
-      process.env.JWT_SECRET || "jwt_super_secret_key",
+      JWT_SECRET || "jwt_super_secret_key",
       { expiresIn: "1h" },
     );
     verify().catch(console.error);
@@ -131,7 +132,7 @@ export const login = async (req, res, next) => {
   }
   const token = jwt.sign(
     { id: user._id, role: user.role },
-    process.env.JWT_SECRET || "jwt_super_secret_key",
+    JWT_SECRET|| "jwt_super_secret_key",
     { expiresIn: "1h" },
   );
   successResponse({
