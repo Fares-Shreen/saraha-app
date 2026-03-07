@@ -120,3 +120,13 @@ export const findOneAndDelete = async ({ model, filter = {} } = {}) => {
   const doc = await model.findOneAndDelete(filter);
   return doc;
 };
+
+export const findOneAndUpdate  = async ({
+  model,
+  filter = {},
+  data,
+  options = {},
+} = {}) => {
+  const doc = await model.findOneAndUpdate(filter, data, options);
+  return doc;
+};

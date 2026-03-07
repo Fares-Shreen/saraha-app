@@ -9,7 +9,8 @@ import jwt from "jsonwebtoken";
 import { compare, hash } from "../../common/utils/security/hash.security.js";
 import { OAuth2Client } from "google-auth-library";
 import { providerEnum, roleEnum } from "../../common/enum/enum.js";
-import { JWT_SECRET } from "../../config/env.sevices.js";
+import { accessTokenSecret, refreshTokenSecret } from "../../config/env.sevices.js";
+import cloudinary from "../../common/utils/cloudinary/cloudinary.service.js";
 
 export const signup = async (req, res, next) => {
   const {
@@ -20,7 +21,6 @@ export const signup = async (req, res, next) => {
     age,
     gender,
     phone,
-    confirmPassword,
   } = req.body;
   const emailExist = await db_service.findOne({
     model: userModel,
@@ -29,6 +29,16 @@ export const signup = async (req, res, next) => {
   if (emailExist) {
     throw new Error("Email already exist", { cause: 400 });
   }
+
+  const profilePicture = await cloudinary.uploader.upload(req.files.attachment[0].path);
+
+  const coverPictures = await Promise.all(
+    req.files.attachments.map(async (file) => {
+      const { public_id, secure_url } = await cloudinary.uploader.upload(file.path);
+      return { public_id, secure_url };
+    })
+  );
+
   const hashedPassword = hash({ plainText: password, saltRounds: 12 });
   const encryptedPhone = encrypt(phone);
 
@@ -43,11 +53,16 @@ export const signup = async (req, res, next) => {
       gender,
       phone: encryptedPhone,
       confirm: true,
-      role:roleEnum.user
+      role:roleEnum.user,
+      profilePicture: {
+        public_id: profilePicture.public_id,
+        secure_url: profilePicture.secure_url,
+      },
+      coverPicture: coverPictures,
     },
     options: {
       runValidators: true,
-      select: "fristName lastName email age gender role",
+      select: "fristName lastName email age gender role profilePicture coverPicture",
     },
   });
   successResponse({
@@ -100,17 +115,22 @@ export const signUpWithGoogle = async (req, res, next) => {
 
       throw new Error("You must login with system", { cause: 400 });
     }
-    const token = jwt.sign(
+    const accessToken = jwt.sign(
       { id: user._id, email: user.email },
-      JWT_SECRET || "jwt_super_secret_key",
+      accessTokenSecret || "access_token_super_secret_key",
       { expiresIn: "1h" },
+    );
+    const refreshToken = jwt.sign(
+      { id: user._id, email: user.email },
+      refreshTokenSecret || "refresh_token_super_secret_key",
+      { expiresIn: "7d" },
     );
     verify().catch(console.error);
     successResponse({
       res,
       status: 200,
       message: "Login successfully",
-      data: { token },
+      data: { accessToken , refreshToken },
     });
   }
 };
@@ -130,16 +150,46 @@ export const login = async (req, res, next) => {
   if (!isPasswordMatch) {
     throw new Error("Password not match", { cause: 400 });
   }
-  const token = jwt.sign(
+  const accessToken = jwt.sign(
     { id: user._id, role: user.role },
-    JWT_SECRET|| "jwt_super_secret_key",
+    accessTokenSecret || "access_token_super_secret_key",
     { expiresIn: "1h" },
+  );
+  const refreshToken = jwt.sign(
+    { id: user._id, email: user.email },
+    refreshTokenSecret || "refresh_token_super_secret_key",
+    { expiresIn: "7d" },
   );
   successResponse({
     res,
     status: 200,
     message: "Login successfully",
-    data: { token },
+    data: { accessToken , refreshToken },
+  });
+};
+export const refreshToken = async (req, res, next) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    throw new Error("Refresh token is required", { cause: 400 });
+  }
+  const decoded = jwt.verify(
+    refreshToken,
+    refreshTokenSecret
+  )
+  const user = await db_service.findById({model:userModel,id:decoded.id});
+  if (!user) {
+    throw new Error("User not found", { cause: 404 });
+  }
+  const accessToken = jwt.sign(
+    { id: user._id, role: user.role },
+    accessTokenSecret || "access_token_super_secret_key",
+    { expiresIn: "1h" },
+  );
+  successResponse({
+    res,
+    status: 200,
+    message: "Refresh token successfully",
+    data: { accessToken },
   });
 };
 
@@ -152,3 +202,39 @@ export const getProfile = async (req, res, next) => {
     data: { ...userInfo._doc, phone: decrypt(userInfo.phone) },
   });
 };
+
+export const shareProfile = async (req, res, next) => {
+    const userId = req.params.id;
+    const userInfo = await db_service.findById({model:userModel,id:userId});
+    successResponse({
+      res,
+      status: 200,
+      message: "Share profile successfully",
+      data: { ...userInfo._doc, phone: decrypt(userInfo.phone) },
+    });
+};
+export const updateProfile = async (req, res, next) => {
+    const userId = req.params.id;
+    const updateDataInfo = await db_service.findOneAndUpdate({model:userModel,filter:{_id:userId},data:req.body,options:{new:true}});
+    successResponse({
+      res,
+      status: 200,
+      message: "Profile updated successfully",
+      data: { ...updateDataInfo._doc, phone: decrypt(updateDataInfo.phone) },
+    });
+};
+export const updatePassword = async (req, res, next) => {
+
+    if (!compare({plainText:req.body.oldPassword,cipherText:req.userInfo.password})){
+      throw new Error("Old password not match", { cause: 400 });
+    }
+    const hashedPassword = hash({ plainText: req.body.newPassword, saltRounds: 12 });
+    const updatedUser = await db_service.findOneAndUpdate({model:userModel,filter:{_id:req.userInfo._id},data:{password:hashedPassword}, options: { new: true }});
+    successResponse({
+      res,
+      status: 200,
+      message: "Password updated successfully",
+      data: { ...updatedUser._doc, phone: decrypt(updatedUser.phone) },
+    });
+};
+

@@ -14,7 +14,7 @@ app.get("/", (req, res) => res.send("Hello World!"));
 connectionDB();
 
 app.use("/auth",authRouter);
-app.use("/user", authMiddleware,userOperationRouter);
+app.use("/user",userOperationRouter);
 
 
 
