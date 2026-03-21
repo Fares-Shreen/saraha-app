@@ -1,6 +1,6 @@
 import { hashSync, compareSync} from "bcrypt";
 import { saltRounds } from "../../../config/env.sevices.js";
-export const hash = ({plainText, saltRounds = Number(saltRounds)} = {}) => {
+export const hash = ({ plainText, saltRounds = Number(saltRounds) } = {}) => {
   return hashSync(plainText, saltRounds);
 };
 

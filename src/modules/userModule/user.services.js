@@ -17,13 +17,19 @@ import cloudinary from "../../common/utils/cloudinary/cloudinary.service.js";
 import revokeTokenModel from "../../DB/models/revokeToken.model.js";
 import { randomUUID } from "crypto";
 import {
+  block_otp_key,
   deleteRedis,
   getAllRevokedKeys,
   getRedis,
+  increment,
+  max_otp_key,
+  otpKey,
   revokedKey,
   setRedis,
+  ttl,
 } from "../../DB/redis/redis.service.js";
 import { redisClient } from "../../DB/redis/redis.Db.js";
+import { generateOTP, sendEmail } from "../../common/utils/nodemailer/sendEmail.js";
 export const signup = async (req, res, next) => {
   const { fristName, lastName, email, password, age, gender, phone } = req.body;
   const emailExist = await db_service.findOne({
@@ -60,7 +66,6 @@ export const signup = async (req, res, next) => {
       age,
       gender,
       phone: encryptedPhone,
-      confirm: true,
       role: roleEnum.user,
       profilePicture: {
         public_id: profilePicture.public_id,
@@ -74,6 +79,13 @@ export const signup = async (req, res, next) => {
         "fristName lastName email age gender role profilePicture coverPicture",
     },
   });
+  const otp =generateOTP()
+  await sendEmail({to:user.email,subject:"OTP",html:`<h1>OTP:${otp}</h1>`})
+  const otpHashed = hash({ plainText: otp.toString(), saltRounds: 12 });
+  console.log(otpHashed);
+  
+  setRedis({ key: otpKey({email}), value: otpHashed , ttl: 60*2 });
+  setRedis({key: max_otp_key({email}),value: 1 ,ttl:60});
   successResponse({
     res,
     status: 201,
@@ -81,6 +93,67 @@ export const signup = async (req, res, next) => {
     data: user,
   });
 };
+
+export const confirmAccount = async (req, res, next) => {
+  const {email,code} = req.body;
+  const otpHashed = await getRedis(otpKey({email}));
+  if (!otpHashed) {
+    throw new Error("OTP not found", { cause: 400 });
+  }
+  const isOtpMatch = compare({ plainText: code, cipherText: otpHashed });
+  if (!isOtpMatch) {
+    throw new Error("OTP not match", { cause: 400 });
+  }
+  const user = await db_service.findOneAndUpdate({
+    model: userModel,
+    filter: { email , confirm: {$exists: false} },
+    data: { confirm: true },
+  });
+  await deleteRedis(otpKey({email}));
+  successResponse({
+    res,
+    status: 200,
+    message: "Account confirmed successfully",
+    data: user,
+  });
+}
+
+export const resendConfirmationCode = async (req, res, next) => {
+  const {email} = req.body;
+  const userExist = await db_service.findOne({
+    model: userModel,
+    filter: { email , confirm: {$exists: false} },
+  });
+  if (!userExist) {
+    throw new Error("User not found", { cause: 400 });
+  }
+  const bloackedOtp = await ttl(block_otp_key({email}));
+  if(bloackedOtp>0){
+    throw new Error(`you reached the limit of sending otp, you can resend after ${bloackedOtp} seconds`, { cause: 400 });
+  }
+  const otpTtl = await ttl(otpKey({email}));
+  if(otpTtl>0){
+    throw new Error(`you can resend otp after ${otpTtl} seconds`, { cause: 400 });
+  }
+  const maxOtpsend = await getRedis(max_otp_key({email}));
+  if(maxOtpsend>=3){
+    await setRedis({key: block_otp_key({email}),value: 1 ,ttl:60});
+    await deleteRedis(max_otp_key({email}));
+    throw new Error(`you can resend otp after ${maxOtpsend} seconds`, { cause: 400 });
+  }
+
+  const otp =generateOTP()
+  await sendEmail({to:userExist.email,subject:"OTP",html:`<h1>OTP:${otp}</h1>`})
+  const otpHashed = hash({ plainText: otp.toString(), saltRounds: 12 });
+  setRedis({ key: otpKey({email}), value: otpHashed , ttl: 60*2 });
+  increment(max_otp_key({email}));
+  successResponse({
+    res,
+    status: 200,
+    message: "OTP resent successfully",
+  });
+}
+
 export const signUpWithGoogle = async (req, res, next) => {
   let user;
   const idToken = req.body.idToken;
