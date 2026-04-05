@@ -19,3 +19,4 @@ export const Email = process.env.Email;
 export const Password = process.env.Password; 
 export const allowOrigins = process.env.allowOrigins.split(",");
 export const applicationName = process.env.applicationName;
+export const DB_Atlas_Url = process.env.DB_Atlas_Url;
